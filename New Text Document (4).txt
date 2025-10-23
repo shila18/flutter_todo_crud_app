@@ -1,0 +1,183 @@
+import 'package:flutter/material.dart';
+import 'package:http/http.dart' as http;
+import 'dart:convert';
+
+void main() {
+  runApp(const ToDoApp());
+}
+
+class ToDoApp extends StatelessWidget {
+  const ToDoApp({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    return MaterialApp(
+      title: 'Flutter To-Do CRUD',
+      debugShowCheckedModeBanner: false,
+      theme: ThemeData(primarySwatch: Colors.indigo),
+      home: const TodoListScreen(),
+    );
+  }
+}
+
+class TodoListScreen extends StatefulWidget {
+  const TodoListScreen({super.key});
+
+  @override
+  State<TodoListScreen> createState() => _TodoListScreenState();
+}
+
+class _TodoListScreenState extends State<TodoListScreen> {
+  List todos = [];
+  bool isLoading = true;
+
+  // ✅ READ - Get todos
+  Future<void> fetchTodos() async {
+    final response =
+        await http.get(Uri.parse('https://jsonplaceholder.typicode.com/todos'));
+    if (response.statusCode == 200) {
+      setState(() {
+        todos = json.decode(response.body);
+        isLoading = false;
+      });
+    }
+  }
+
+  // ✅ CREATE - Add new todo
+  Future<void> createTodo(String title) async {
+    final response = await http.post(
+      Uri.parse('https://jsonplaceholder.typicode.com/todos'),
+      headers: {'Content-Type': 'application/json'},
+      body: json.encode({'title': title, 'completed': false}),
+    );
+    if (response.statusCode == 201) {
+      fetchTodos();
+    }
+  }
+
+  // ✅ UPDATE - Edit todo title or completion
+  Future<void> updateTodo(int id, String title, bool completed) async {
+    final response = await http.put(
+      Uri.parse('https://jsonplaceholder.typicode.com/todos/$id'),
+      headers: {'Content-Type': 'application/json'},
+      body: json.encode({'title': title, 'completed': completed}),
+    );
+    if (response.statusCode == 200) {
+      fetchTodos();
+    }
+  }
+
+  // ✅ DELETE - Remove todo
+  Future<void> deleteTodo(int id) async {
+    final response = await http.delete(
+      Uri.parse('https://jsonplaceholder.typicode.com/todos/$id'),
+    );
+    if (response.statusCode == 200) {
+      fetchTodos();
+    }
+  }
+
+  @override
+  void initState() {
+    super.initState();
+    fetchTodos();
+  }
+
+  void _showForm({int? id, String? title, bool? completed}) {
+    final TextEditingController titleController =
+        TextEditingController(text: title ?? '');
+    bool isCompleted = completed ?? false;
+
+    showDialog(
+      context: context,
+      builder: (context) {
+        return AlertDialog(
+          title: Text(id == null ? 'Add Task' : 'Edit Task'),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              TextField(
+                controller: titleController,
+                decoration: const InputDecoration(labelText: 'Task Title'),
+              ),
+              Row(
+                children: [
+                  Checkbox(
+                    value: isCompleted,
+                    onChanged: (val) {
+                      isCompleted = val ?? false;
+                    },
+                  ),
+                  const Text("Completed?")
+                ],
+              ),
+            ],
+          ),
+          actions: [
+            TextButton(
+              onPressed: () {
+                if (id == null) {
+                  createTodo(titleController.text);
+                } else {
+                  updateTodo(id, titleController.text, isCompleted);
+                }
+                Navigator.pop(context);
+              },
+              child: const Text('Save'),
+            ),
+          ],
+        );
+      },
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      appBar: AppBar(
+        title: const Text('Flutter To-Do List (CRUD)'),
+        centerTitle: true,
+      ),
+      floatingActionButton: FloatingActionButton(
+        onPressed: () => _showForm(),
+        child: const Icon(Icons.add),
+      ),
+      body: isLoading
+          ? const Center(child: CircularProgressIndicator())
+          : ListView.builder(
+              itemCount: todos.length,
+              itemBuilder: (context, index) {
+                final todo = todos[index];
+                return Card(
+                  margin: const EdgeInsets.all(8),
+                  child: ListTile(
+                    title: Text(todo['title']),
+                    leading: Checkbox(
+                      value: todo['completed'],
+                      onChanged: (val) {
+                        updateTodo(todo['id'], todo['title'], val ?? false);
+                      },
+                    ),
+                    trailing: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        IconButton(
+                          icon: const Icon(Icons.edit, color: Colors.orange),
+                          onPressed: () => _showForm(
+                              id: todo['id'],
+                              title: todo['title'],
+                              completed: todo['completed']),
+                        ),
+                        IconButton(
+                          icon: const Icon(Icons.delete, color: Colors.red),
+                          onPressed: () => deleteTodo(todo['id']),
+                        ),
+                      ],
+                    ),
+                  ),
+                );
+              },
+            ),
+    );
+  }
+}
